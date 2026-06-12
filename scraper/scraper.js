@@ -39,6 +39,10 @@ async function fetchViaJsonFeed() {
       clearTimeout(timeout);
 
       console.log(`[json] Response status: ${res.status}`);
+      if (res.status === 404) {
+        console.log(`[json] Skipping ${url} — not yet published (404)`);
+        continue;  // nextweek feed only goes live mid-week — skip gracefully
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
       const data = await res.json();
