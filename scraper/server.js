@@ -1,20 +1,12 @@
-/**
- * Economic Calendar API Server
- * Deployed on Render — exposes scraped FF events as JSON
- * Apps Script polls this endpoint to sync Google Calendar
- */
-
 const express = require('express');
 const { getEconomicEvents } = require('./scraper');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Simple in-memory cache — re-scrape at most every 30 mins
 let cache = { data: null, fetchedAt: 0 };
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
-// Optional: protect with a shared secret so only your Apps Script can call it
 const API_SECRET = process.env.API_SECRET || null;
 
 function authMiddleware(req, res, next) {
@@ -25,20 +17,13 @@ function authMiddleware(req, res, next) {
 }
 
 // ─── GET /events ──────────────────────────────────────────────────────────────
-// Returns filtered, structured economic events for this week + next
 app.get('/events', authMiddleware, async (req, res) => {
   try {
     const now = Date.now();
-    const cacheStale = now - cache.fetchedAt > CACHE_TTL_MS;
-
-    if (cache.data && !cacheStale) {
-      console.log('[api] Serving from cache');
+    if (cache.data && (now - cache.fetchedAt < CACHE_TTL_MS)) {
       return res.json({ ok: true, cached: true, events: cache.data });
     }
-
-    console.log('[api] Cache miss — scraping...');
     const events = await getEconomicEvents();
-
     cache = { data: events, fetchedAt: now };
     res.json({ ok: true, cached: false, events });
   } catch (err) {
@@ -51,13 +36,42 @@ app.get('/events', authMiddleware, async (req, res) => {
 app.get('/health', (req, res) => {
   res.json({
     ok: true,
-    cacheAge: cache.fetchedAt
-      ? Math.round((Date.now() - cache.fetchedAt) / 1000) + 's'
-      : 'empty',
+    cacheAge: cache.fetchedAt ? Math.round((Date.now() - cache.fetchedAt) / 1000) + 's' : 'empty',
     eventCount: cache.data?.length ?? 0,
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`[server] Listening on port ${PORT}`);
+// ─── GET /debug — tests the JSON feed directly, no Playwright ─────────────────
+// Open this in your browser to see exactly what nfs.faireconomy.media returns
+app.get('/debug', async (req, res) => {
+  const results = {};
+
+  for (const week of ['thisweek', 'nextweek']) {
+    const url = `https://nfs.faireconomy.media/ff_calendar_${week}.json`;
+    try {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 8000);
+      const r = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+          'Referer': 'https://www.forexfactory.com/',
+        },
+      });
+      clearTimeout(t);
+      const body = await r.text();
+      results[week] = {
+        status: r.status,
+        ok: r.ok,
+        bodyLength: body.length,
+        preview: body.substring(0, 300),
+      };
+    } catch (e) {
+      results[week] = { error: e.message };
+    }
+  }
+
+  res.json(results);
 });
+
+app.listen(PORT, () => console.log(`[server] Listening on port ${PORT}`));
