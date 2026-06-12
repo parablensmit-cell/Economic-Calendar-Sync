@@ -11,12 +11,12 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY package*.json ./
+COPY scraper/package*.json ./
 RUN npm install
 
 RUN npx playwright install chromium
 
-COPY . .
+COPY scraper/ .
 
 EXPOSE 3000
 CMD ["npm", "start"]
