@@ -11,7 +11,7 @@
 const { chromium } = require('playwright');
 
 const TARGET_COUNTRIES = ['USD', 'EUR', 'GBP', 'AUD', 'JPY'];
-const TARGET_IMPACT    = ['High'];  // 'High', 'Medium', 'Low'
+const TARGET_IMPACT    = ['High', 'Medium'];  // 'High', 'Medium', 'Low'
 
 // ─── Strategy 1: FF JSON Feed ─────────────────────────────────────────────────
 async function fetchViaJsonFeed() {
